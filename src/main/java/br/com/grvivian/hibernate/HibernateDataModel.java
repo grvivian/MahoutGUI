@@ -1,6 +1,5 @@
 package br.com.grvivian.hibernate;
 
-import br.com.grvivian.model.Preferences;
 import com.google.common.base.Preconditions;
 import java.io.IOException;
 import java.math.BigInteger;
