@@ -119,7 +119,7 @@ public class HibernateDataModel extends AbstractDataModel {
           case FIREBIRD:
             cfg.setProperty(Environment.DIALECT, org.hibernate.dialect.FirebirdDialect.class.getName());
             cfg.setProperty(Environment.DRIVER, org.firebirdsql.jdbc.FBDriver.class.getName());
-            cfg.setProperty(Environment.URL, "jdbc:firebirdsql://" + this.host + ":" + this.port + "/" + this.database);
+            cfg.setProperty(Environment.URL, "jdbc:firebirdsql://" + this.host + "/" + this.port + ":" + this.database);
             break;
           case POSTGRES:
             cfg.setProperty(Environment.DIALECT, org.hibernate.dialect.PostgreSQL9Dialect.class.getName());
