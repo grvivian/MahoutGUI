@@ -1,8 +1,12 @@
 package br.com.grvivian.view;
 
+import br.com.grvivian.hibernate.ConfigDB;
 import br.com.grvivian.hibernate.HibernateDataModel;
+import br.com.grvivian.hibernate.HibernateUtil;
 import java.io.File;
 import java.io.IOException;
+import java.math.BigInteger;
+import java.text.DecimalFormat;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -14,6 +18,13 @@ import javax.swing.UnsupportedLookAndFeelException;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import org.apache.commons.io.FileUtils;
 import org.apache.mahout.cf.taste.common.TasteException;
+import org.apache.mahout.cf.taste.eval.IRStatistics;
+import org.apache.mahout.cf.taste.eval.RecommenderBuilder;
+import org.apache.mahout.cf.taste.eval.RecommenderEvaluator;
+import org.apache.mahout.cf.taste.eval.RecommenderIRStatsEvaluator;
+import org.apache.mahout.cf.taste.impl.eval.AverageAbsoluteDifferenceRecommenderEvaluator;
+import org.apache.mahout.cf.taste.impl.eval.GenericRecommenderIRStatsEvaluator;
+import org.apache.mahout.cf.taste.impl.eval.RMSRecommenderEvaluator;
 import org.apache.mahout.cf.taste.impl.model.GenericBooleanPrefDataModel;
 import org.apache.mahout.cf.taste.impl.model.GenericPreference;
 import org.apache.mahout.cf.taste.impl.model.file.FileDataModel;
@@ -35,12 +46,23 @@ import org.apache.mahout.cf.taste.recommender.RecommendedItem;
 import org.apache.mahout.cf.taste.recommender.Recommender;
 import org.apache.mahout.cf.taste.similarity.ItemSimilarity;
 import org.apache.mahout.cf.taste.similarity.UserSimilarity;
+import org.hibernate.HibernateException;
+import org.hibernate.Session;
+import org.hibernate.Transaction;
+import org.hibernate.query.NativeQuery;
 
 /**
  *
  * @author glaucio
  */
 public class FrmMain extends javax.swing.JFrame {
+
+  private static final DecimalFormat DF = new DecimalFormat("#0.0000");
+  private final ConfigDB configDB = new ConfigDB();
+  private final FrmDB frmBD = new FrmDB(configDB);
+  private final RecommenderIRStatsEvaluator irStats = new GenericRecommenderIRStatsEvaluator();
+  private final RecommenderEvaluator rms = new RMSRecommenderEvaluator();
+  private final RecommenderEvaluator mae = new AverageAbsoluteDifferenceRecommenderEvaluator();
 
   /**
    * Creates new form FrmMain
@@ -234,7 +256,7 @@ public class FrmMain extends javax.swing.JFrame {
     });
 
     lbNN.setLabelFor(cbNN);
-    lbNN.setText("Nearest Neighour:");
+    lbNN.setText("Nearest Neighborhood:");
 
     jLabel2.setLabelFor(cbSimilarity);
     jLabel2.setText("Similarity:");
@@ -263,7 +285,7 @@ public class FrmMain extends javax.swing.JFrame {
     jPanel1Layout.setHorizontalGroup(
       jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
       .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
-        .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+        .addContainerGap(31, Short.MAX_VALUE)
         .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
           .addComponent(jLabel5, javax.swing.GroupLayout.Alignment.TRAILING)
           .addComponent(jLabel3, javax.swing.GroupLayout.Alignment.TRAILING))
@@ -318,7 +340,7 @@ public class FrmMain extends javax.swing.JFrame {
               .addComponent(spNumOfUser)
               .addComponent(cbNN, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
               .addComponent(cbSimilarity, javax.swing.GroupLayout.Alignment.TRAILING, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-              .addComponent(slThreshold, javax.swing.GroupLayout.DEFAULT_SIZE, 377, Short.MAX_VALUE)))
+              .addComponent(slThreshold, javax.swing.GroupLayout.DEFAULT_SIZE, 345, Short.MAX_VALUE)))
           .addGroup(jLayeredPane2Layout.createSequentialGroup()
             .addContainerGap()
             .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
@@ -411,6 +433,7 @@ public class FrmMain extends javax.swing.JFrame {
     );
 
     pack();
+    setLocationRelativeTo(null);
   }// </editor-fold>//GEN-END:initComponents
 
   private void addOutput(String t) {
@@ -418,25 +441,63 @@ public class FrmMain extends javax.swing.JFrame {
   }
 
   private void performItemRecommendation(DataModel model, ItemSimilarity itemSimilarity, long userId, int numberOfRecommendation) throws TasteException {
-    Recommender itemRecommender = new GenericItemBasedRecommender(model, itemSimilarity);
+    RecommenderBuilder recommenderBuilder = new RecommenderBuilder() {
+      @Override
+      public Recommender buildRecommender(DataModel model) throws TasteException {
+        return new GenericItemBasedRecommender(model, itemSimilarity);
+      }
+    };
 
-    List<RecommendedItem> itemBasedRecommendations = itemRecommender.recommend(userId, numberOfRecommendation);
+    //Recommender itemRecommender = new GenericItemBasedRecommender(model, itemSimilarity);
+    List<RecommendedItem> itemBasedRecommendations = recommenderBuilder.buildRecommender(model).recommend(userId, numberOfRecommendation);
 
+    int cont = 0;
+    addOutput("Items Recommended for user " + userId + ":");
     for (RecommendedItem r : itemBasedRecommendations) {
-      addOutput("Recommended item for user " + userId + " is " + r.getItemID() + " preference is " + r.getValue());
-      //addOutput("The estimated prefrence for user " + userId + " is " + itemRecommender.estimatePreference(userId, r.getItemID()));
+      addOutput("- " + r.getItemID() + " preference predicted is " + r.getValue());
+      cont++;
     }
+
+    IRStatistics stats = irStats.evaluate(recommenderBuilder, null, model, null, cont, GenericRecommenderIRStatsEvaluator.CHOOSE_THRESHOLD, 1.0);
+
+    // Use 70% of the data to train; test using the other 30%.
+    double r = rms.evaluate(recommenderBuilder, null, model, 0.7, 1.0);
+    double m = mae.evaluate(recommenderBuilder, null, model, 0.7, 1.0);
+
+    addOutput(" Precision: " + DF.format(stats.getPrecision())
+            + " Recall: " + DF.format(stats.getRecall())
+            + " RMSE: " + DF.format(r)
+            + " MAE: " + DF.format(m) + "\n");
   }
 
   private void performUserRecommendation(DataModel model, UserNeighborhood neighbour, UserSimilarity similarity, long userId, int numberOfRecommendation) throws TasteException {
-    Recommender recommender = new GenericUserBasedRecommender(model, neighbour, similarity);
+    RecommenderBuilder recommenderBuilder = new RecommenderBuilder() {
+      @Override
+      public Recommender buildRecommender(DataModel model) throws TasteException {
+        return new GenericUserBasedRecommender(model, neighbour, similarity);
+      }
+    };
 
-    List<RecommendedItem> recommendations = recommender.recommend(userId, numberOfRecommendation);
+    //Recommender recommender = new GenericUserBasedRecommender(model, neighbour, similarity);
+    List<RecommendedItem> recommendations = recommenderBuilder.buildRecommender(model).recommend(userId, numberOfRecommendation);
 
+    int cont = 0;
+    addOutput("Items Recommended for user " + userId + ":");
     for (RecommendedItem r : recommendations) {
-      addOutput("The recommended item for user " + userId + " is " + r.getItemID() + " preference is " + r.getValue());
-      //addOutput("The estimated prefrence for user " + userId + " is " + recommender.estimatePreference(userId, r.getItemID()));
+      addOutput("- " + r.getItemID() + " preference predicted: " + r.getValue());
+      cont++;
     }
+
+    IRStatistics stats = irStats.evaluate(recommenderBuilder, null, model, null, cont, GenericRecommenderIRStatsEvaluator.CHOOSE_THRESHOLD, 1.0);
+
+    // Use 70% of the data to train; test using the other 30%.
+    double r = rms.evaluate(recommenderBuilder, null, model, 0.7, 1.0);
+    double m = mae.evaluate(recommenderBuilder, null, model, 0.7, 1.0);
+
+    addOutput(" Precision: " + DF.format(stats.getPrecision())
+            + " Recall: " + DF.format(stats.getRecall())
+            + " RMSE: " + DF.format(r)
+            + " MAE: " + DF.format(m) + "\n");
   }
 
   private void setUserDetails() {
@@ -468,7 +529,7 @@ public class FrmMain extends javax.swing.JFrame {
       } else if (cbModel.getSelectedItem().equals(GenericBooleanPrefDataModel.class.getSimpleName())) {
 
       } else if (cbModel.getSelectedItem().equals(HibernateDataModel.class.getSimpleName())) {
-        model = new HibernateDataModel("127.0.0.1", 5432, "postgres", "1234", "movielens", "movies", "userId", "movieId", "rating");
+        model = new HibernateDataModel(configDB);
       }
 
       long userID = (long) cbRecommendationsToUser.getSelectedItem();
@@ -640,8 +701,91 @@ public class FrmMain extends javax.swing.JFrame {
     }
   }//GEN-LAST:event_rbItemBasedItemStateChanged
 
+  private void getDataFromDB() throws Exception {
+    userIds.clear();
+    String[] coluns = new String[]{"User ID", "Item ID", "Preference"};
+    Object[][] data = null;
+
+    Session s = null;
+    Transaction t = null;
+    List<Object[]> lista = null;
+
+    try {
+      s = HibernateUtil.getSessionFactory(this.configDB).openSession();
+      t = s.beginTransaction();
+      //t.begin();
+      NativeQuery q = s.createNativeQuery("select "
+              + this.configDB.getUser_id() + " , "//as userId
+              + this.configDB.getItem_id() + " , "//as itemId
+              + this.configDB.getPref() + "  "//as preference
+              + " from " + this.configDB.getTable() + "  "//as Preferences
+              + " order by 1"); //Important
+      lista = q.setCacheable(true).list();
+
+      data = new Object[lista.size()][3];
+
+      for (int x = 0; x < lista.size(); x++) {
+        Object[] o = lista.get(x);
+
+        if (o.length != 3) {
+          return;
+        }
+
+        BigInteger u = (BigInteger) o[0];
+        BigInteger i = (BigInteger) o[1];
+        float pref = (float) o[2];
+
+        Long userId = u.longValue();
+        if (!userIds.contains(userId)) {
+          userIds.add(userId);
+        }
+
+        data[x][0] = u.longValue();
+        data[x][1] = i.longValue();
+        data[x][2] = pref;
+      }
+
+      t.commit();
+    } catch (HibernateException e) {
+      if ((t != null) && (t.isActive())) {
+        t.rollback();
+      }
+      throw e;
+    } finally {
+      if ((s != null) && (s.isConnected())) {
+        s.close();
+      }
+    }
+
+    setUserDetails();
+    tbPreferences.setModel(new javax.swing.table.DefaultTableModel(data, coluns) {
+      Class[] types = new Class[]{java.lang.Long.class, java.lang.Long.class, java.lang.Float.class};
+      boolean[] canEdit = new boolean[]{false, false, false};
+
+      @Override
+      public Class getColumnClass(int columnIndex) {
+        return types[columnIndex];
+      }
+
+      @Override
+      public boolean isCellEditable(int rowIndex, int columnIndex) {
+        return canEdit[columnIndex];
+      }
+    });
+  }
+
   private void cbModelItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_cbModelItemStateChanged
-    // TODO add your handling code here:
+    try {
+      if (cbModel.getSelectedItem().equals(FileDataModel.class.getSimpleName())) {
+
+      } else if (cbModel.getSelectedItem().equals(HibernateDataModel.class.getSimpleName())) {
+        frmBD.setVisible(true);
+        getDataFromDB();
+        setUserDetails();
+      }
+    } catch (Exception ex) {
+      Logger.getLogger(FrmMain.class.getName()).log(Level.SEVERE, null, ex);
+    }
   }//GEN-LAST:event_cbModelItemStateChanged
 
   /**
