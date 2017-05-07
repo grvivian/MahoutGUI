@@ -2,6 +2,7 @@ package br.com.grvivian.view;
 
 import br.com.grvivian.hibernate.ConfigDB;
 import br.com.grvivian.hibernate.HibernateUtil;
+import br.com.grvivian.hibernate.TpDB;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
@@ -14,7 +15,7 @@ import org.hibernate.internal.SessionImpl;
  *
  * @author glaucio
  */
-public class FrmDB extends javax.swing.JFrame {
+public class FrmDB extends javax.swing.JDialog {
 
   private ConfigDB configDB;
 
@@ -29,6 +30,12 @@ public class FrmDB extends javax.swing.JFrame {
       configDB.readConfig();
       initComponents();
 
+      cbTpDb.removeAllItems();
+      cbTpDb.addItem(TpDB.MYSQL);
+      cbTpDb.addItem(TpDB.POSTGRES);
+      cbTpDb.addItem(TpDB.FIREBIRD);
+
+      cbTpDb.setSelectedItem(configDB.getTpDB());
       tfHost.setText(configDB.getHost());
       tfPort.setText(String.valueOf(configDB.getPort()));
       tfUser.setText(configDB.getUser());
@@ -69,9 +76,13 @@ public class FrmDB extends javax.swing.JFrame {
     jLabel9 = new javax.swing.JLabel();
     cbEvaluation = new javax.swing.JComboBox<>();
     btOk = new javax.swing.JButton();
+    cbTpDb = new javax.swing.JComboBox<>();
+    jLabel10 = new javax.swing.JLabel();
+    jSeparator1 = new javax.swing.JSeparator();
 
+    setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
     setTitle("Import Data From Relational Datadase");
-    setAlwaysOnTop(true);
+    setModal(true);
     setResizable(false);
 
     jLabel1.setText("Database");
@@ -105,25 +116,7 @@ public class FrmDB extends javax.swing.JFrame {
 
     jLabel8.setText("Item ID:");
 
-    cbUserID.addItemListener(new java.awt.event.ItemListener() {
-      public void itemStateChanged(java.awt.event.ItemEvent evt) {
-        cbUserIDItemStateChanged(evt);
-      }
-    });
-
-    cbItemId.addItemListener(new java.awt.event.ItemListener() {
-      public void itemStateChanged(java.awt.event.ItemEvent evt) {
-        cbItemIdItemStateChanged(evt);
-      }
-    });
-
     jLabel9.setText("Evaluation:");
-
-    cbEvaluation.addItemListener(new java.awt.event.ItemListener() {
-      public void itemStateChanged(java.awt.event.ItemEvent evt) {
-        cbEvaluationItemStateChanged(evt);
-      }
-    });
 
     btOk.setText("OK");
     btOk.addActionListener(new java.awt.event.ActionListener() {
@@ -132,63 +125,72 @@ public class FrmDB extends javax.swing.JFrame {
       }
     });
 
+    cbTpDb.addItemListener(new java.awt.event.ItemListener() {
+      public void itemStateChanged(java.awt.event.ItemEvent evt) {
+        cbTpDbItemStateChanged(evt);
+      }
+    });
+
+    jLabel10.setText("Type:");
+
+    jSeparator1.setBorder(javax.swing.BorderFactory.createTitledBorder(""));
+
     javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
     getContentPane().setLayout(layout);
     layout.setHorizontalGroup(
       layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
       .addGroup(layout.createSequentialGroup()
+        .addContainerGap()
         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
           .addGroup(layout.createSequentialGroup()
-            .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-            .addComponent(btOk, javax.swing.GroupLayout.PREFERRED_SIZE, 75, javax.swing.GroupLayout.PREFERRED_SIZE))
-          .addGroup(layout.createSequentialGroup()
-            .addGap(45, 45, 45)
-            .addComponent(jLabel6)
-            .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-            .addComponent(cbTable, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-          .addGroup(layout.createSequentialGroup()
-            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-              .addGroup(layout.createSequentialGroup()
-                .addGap(50, 50, 50)
-                .addComponent(jLabel2))
-              .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                .addContainerGap()
-                .addComponent(jLabel5)))
-            .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-              .addGroup(layout.createSequentialGroup()
-                .addComponent(tfHost, javax.swing.GroupLayout.PREFERRED_SIZE, 136, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addComponent(jLabel3))
-              .addGroup(layout.createSequentialGroup()
-                .addComponent(tfPassword, javax.swing.GroupLayout.PREFERRED_SIZE, 136, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addComponent(jLabel1)))
-            .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-              .addGroup(layout.createSequentialGroup()
-                .addComponent(tfPort, javax.swing.GroupLayout.PREFERRED_SIZE, 52, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(38, 38, 38)
-                .addComponent(jLabel4))
-              .addComponent(tfDatabase, javax.swing.GroupLayout.PREFERRED_SIZE, 91, javax.swing.GroupLayout.PREFERRED_SIZE))
-            .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-              .addComponent(btConnect, javax.swing.GroupLayout.DEFAULT_SIZE, 99, Short.MAX_VALUE)
-              .addComponent(tfUser)))
-          .addGroup(layout.createSequentialGroup()
-            .addContainerGap()
             .addComponent(jLabel7)
+            .addGap(0, 0, Short.MAX_VALUE))
+          .addGroup(layout.createSequentialGroup()
+            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+              .addComponent(jLabel4)
+              .addComponent(jLabel6)
+              .addComponent(jLabel10))
             .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-            .addComponent(cbUserID, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
-            .addGap(18, 18, 18)
-            .addComponent(jLabel8)
-            .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-            .addComponent(cbItemId, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
-            .addGap(18, 18, 18)
-            .addComponent(jLabel9)
-            .addGap(18, 18, 18)
-            .addComponent(cbEvaluation, javax.swing.GroupLayout.PREFERRED_SIZE, 114, javax.swing.GroupLayout.PREFERRED_SIZE)
-            .addGap(0, 0, Short.MAX_VALUE)))
+            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+              .addGroup(layout.createSequentialGroup()
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                  .addGroup(layout.createSequentialGroup()
+                    .addComponent(tfUser, javax.swing.GroupLayout.PREFERRED_SIZE, 80, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                    .addComponent(jLabel5)
+                    .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                    .addComponent(tfPassword, javax.swing.GroupLayout.PREFERRED_SIZE, 80, javax.swing.GroupLayout.PREFERRED_SIZE))
+                  .addComponent(cbTpDb, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                  .addComponent(jLabel1)
+                  .addComponent(jLabel2))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                  .addComponent(tfHost, javax.swing.GroupLayout.DEFAULT_SIZE, 124, Short.MAX_VALUE)
+                  .addComponent(tfDatabase))
+                .addGap(62, 62, 62)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                  .addComponent(btConnect, javax.swing.GroupLayout.PREFERRED_SIZE, 74, javax.swing.GroupLayout.PREFERRED_SIZE)
+                  .addGroup(layout.createSequentialGroup()
+                    .addComponent(jLabel3)
+                    .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                    .addComponent(tfPort, javax.swing.GroupLayout.PREFERRED_SIZE, 52, javax.swing.GroupLayout.PREFERRED_SIZE))))
+              .addComponent(jSeparator1)
+              .addComponent(cbTable, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+              .addGroup(layout.createSequentialGroup()
+                .addComponent(cbUserID, javax.swing.GroupLayout.PREFERRED_SIZE, 150, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 28, Short.MAX_VALUE)
+                .addComponent(jLabel8)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(cbItemId, javax.swing.GroupLayout.PREFERRED_SIZE, 150, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(44, 44, 44)
+                .addComponent(jLabel9)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(cbEvaluation, javax.swing.GroupLayout.PREFERRED_SIZE, 150, javax.swing.GroupLayout.PREFERRED_SIZE))))
+          .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+            .addGap(0, 0, Short.MAX_VALUE)
+            .addComponent(btOk, javax.swing.GroupLayout.PREFERRED_SIZE, 75, javax.swing.GroupLayout.PREFERRED_SIZE)))
         .addContainerGap())
     );
     layout.setVerticalGroup(
@@ -198,18 +200,22 @@ public class FrmDB extends javax.swing.JFrame {
         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
           .addComponent(tfHost, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
           .addComponent(jLabel2)
+          .addComponent(cbTpDb, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+          .addComponent(jLabel10)
           .addComponent(jLabel3)
-          .addComponent(tfPort, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-          .addComponent(tfUser, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-          .addComponent(jLabel4))
+          .addComponent(tfPort, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
           .addComponent(jLabel5)
           .addComponent(tfPassword, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
           .addComponent(jLabel1)
           .addComponent(tfDatabase, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+          .addComponent(jLabel4)
+          .addComponent(tfUser, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
           .addComponent(btConnect))
         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+        .addComponent(jSeparator1, javax.swing.GroupLayout.PREFERRED_SIZE, 1, javax.swing.GroupLayout.PREFERRED_SIZE)
+        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
           .addComponent(cbTable, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
           .addComponent(jLabel6))
@@ -221,7 +227,7 @@ public class FrmDB extends javax.swing.JFrame {
           .addComponent(cbItemId, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
           .addComponent(jLabel9)
           .addComponent(cbEvaluation, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
         .addComponent(btOk)
         .addContainerGap())
     );
@@ -262,36 +268,9 @@ public class FrmDB extends javax.swing.JFrame {
     }
   }
 
-  private void getData() {
-    /*
-    String f1 = (String) cbUserID.getSelectedItem();
-    String f2 = (String) cbItemId.getSelectedItem();
-    String f3 = (String) cbEvaluation.getSelectedItem();
-
-    
-
-    String[] cols = new String[]{"User ID", "Item ID", "Evaluation"};
-    Object[][] data = new new Object[][3];
-
-    jTable1.setModel(new javax.swing.table.DefaultTableModel(data, cols) {
-      Class[] types = new Class[]{java.lang.Long.class, java.lang.Long.class, java.lang.Float.class};
-      boolean[] canEdit = new boolean[]{false, false, false};
-
-      @Override
-      public Class getColumnClass(int columnIndex) {
-        return types[columnIndex];
-      }
-
-      @Override
-      public boolean isCellEditable(int rowIndex, int columnIndex) {
-        return canEdit[columnIndex];
-      }
-    });
-     */
-  }
-
   private void btConnectActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btConnectActionPerformed
     try {
+      configDB.setTpDB((TpDB) cbTpDb.getSelectedItem());
       configDB.setHost(tfHost.getText());
       configDB.setPort(Integer.parseInt(tfPort.getText()));
       configDB.setUser(tfUser.getText());
@@ -299,6 +278,8 @@ public class FrmDB extends javax.swing.JFrame {
       configDB.setDatabase(tfDatabase.getText());
 
       findTables();
+
+      configDB.writeConfig();
     } catch (Exception ex) {
       JOptionPane.showMessageDialog(null, ex.getMessage());
       Logger.getLogger(FrmDB.class.getName()).log(Level.SEVERE, null, ex);
@@ -331,17 +312,25 @@ public class FrmDB extends javax.swing.JFrame {
     }
   }//GEN-LAST:event_cbTableItemStateChanged
 
-  private void cbUserIDItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_cbUserIDItemStateChanged
-    getData();
-  }//GEN-LAST:event_cbUserIDItemStateChanged
+  private void cbTpDbItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_cbTpDbItemStateChanged
+    TpDB t = (TpDB) cbTpDb.getSelectedItem();
 
-  private void cbItemIdItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_cbItemIdItemStateChanged
-    getData();
-  }//GEN-LAST:event_cbItemIdItemStateChanged
-
-  private void cbEvaluationItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_cbEvaluationItemStateChanged
-    getData();
-  }//GEN-LAST:event_cbEvaluationItemStateChanged
+    if (null != t) {
+      switch (t) {
+        case POSTGRES:
+          tfPort.setText("5432");
+          break;
+        case MYSQL:
+          tfPort.setText("3306");
+          break;
+        case FIREBIRD:
+          tfPort.setText("3050");
+          break;
+        default:
+          break;
+      }
+    }
+  }//GEN-LAST:event_cbTpDbItemStateChanged
 
 
   // Variables declaration - do not modify//GEN-BEGIN:variables
@@ -350,8 +339,10 @@ public class FrmDB extends javax.swing.JFrame {
   private javax.swing.JComboBox<String> cbEvaluation;
   private javax.swing.JComboBox<String> cbItemId;
   private javax.swing.JComboBox<String> cbTable;
+  private javax.swing.JComboBox<TpDB> cbTpDb;
   private javax.swing.JComboBox<String> cbUserID;
   private javax.swing.JLabel jLabel1;
+  private javax.swing.JLabel jLabel10;
   private javax.swing.JLabel jLabel2;
   private javax.swing.JLabel jLabel3;
   private javax.swing.JLabel jLabel4;
@@ -360,6 +351,7 @@ public class FrmDB extends javax.swing.JFrame {
   private javax.swing.JLabel jLabel7;
   private javax.swing.JLabel jLabel8;
   private javax.swing.JLabel jLabel9;
+  private javax.swing.JSeparator jSeparator1;
   private javax.swing.JTextField tfDatabase;
   private javax.swing.JTextField tfHost;
   private javax.swing.JPasswordField tfPassword;

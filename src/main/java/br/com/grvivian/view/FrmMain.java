@@ -3,13 +3,17 @@ package br.com.grvivian.view;
 import br.com.grvivian.hibernate.ConfigDB;
 import br.com.grvivian.hibernate.HibernateDataModel;
 import br.com.grvivian.hibernate.HibernateUtil;
+import java.awt.event.ItemEvent;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JFileChooser;
@@ -26,12 +30,15 @@ import org.apache.mahout.cf.taste.impl.eval.AverageAbsoluteDifferenceRecommender
 import org.apache.mahout.cf.taste.impl.eval.GenericRecommenderIRStatsEvaluator;
 import org.apache.mahout.cf.taste.impl.eval.RMSRecommenderEvaluator;
 import org.apache.mahout.cf.taste.impl.model.GenericBooleanPrefDataModel;
-import org.apache.mahout.cf.taste.impl.model.GenericPreference;
 import org.apache.mahout.cf.taste.impl.model.file.FileDataModel;
 import org.apache.mahout.cf.taste.impl.neighborhood.NearestNUserNeighborhood;
 import org.apache.mahout.cf.taste.impl.neighborhood.ThresholdUserNeighborhood;
+import org.apache.mahout.cf.taste.impl.recommender.GenericBooleanPrefItemBasedRecommender;
+import org.apache.mahout.cf.taste.impl.recommender.GenericBooleanPrefUserBasedRecommender;
 import org.apache.mahout.cf.taste.impl.recommender.GenericItemBasedRecommender;
 import org.apache.mahout.cf.taste.impl.recommender.GenericUserBasedRecommender;
+import org.apache.mahout.cf.taste.impl.recommender.svd.ALSWRFactorizer;
+import org.apache.mahout.cf.taste.impl.recommender.svd.SVDRecommender;
 import org.apache.mahout.cf.taste.impl.similarity.CityBlockSimilarity;
 import org.apache.mahout.cf.taste.impl.similarity.EuclideanDistanceSimilarity;
 import org.apache.mahout.cf.taste.impl.similarity.LogLikelihoodSimilarity;
@@ -40,7 +47,6 @@ import org.apache.mahout.cf.taste.impl.similarity.SpearmanCorrelationSimilarity;
 import org.apache.mahout.cf.taste.impl.similarity.TanimotoCoefficientSimilarity;
 import org.apache.mahout.cf.taste.impl.similarity.UncenteredCosineSimilarity;
 import org.apache.mahout.cf.taste.model.DataModel;
-import org.apache.mahout.cf.taste.model.JDBCDataModel;
 import org.apache.mahout.cf.taste.neighborhood.UserNeighborhood;
 import org.apache.mahout.cf.taste.recommender.RecommendedItem;
 import org.apache.mahout.cf.taste.recommender.Recommender;
@@ -59,16 +65,26 @@ public class FrmMain extends javax.swing.JFrame {
 
   private static final DecimalFormat DF = new DecimalFormat("#0.0000");
   private final ConfigDB configDB = new ConfigDB();
-  private final FrmDB frmBD = new FrmDB(configDB);
   private final RecommenderIRStatsEvaluator irStats = new GenericRecommenderIRStatsEvaluator();
   private final RecommenderEvaluator rms = new RMSRecommenderEvaluator();
   private final RecommenderEvaluator mae = new AverageAbsoluteDifferenceRecommenderEvaluator();
+  private DataModel model = null;
+  private ItemSimilarity is = null;
+  private UserSimilarity us = null;
+  private UserNeighborhood neighbour = null;
+  private ALSWRFactorizer factorizer = null;
+  private String[] coluns = null;
+  private Object[][] data = null;
+  private Class[] types = null;
+  private boolean[] canEdit = null;
 
   /**
    * Creates new form FrmMain
    */
   public FrmMain() {
     initComponents();
+
+    DF.setDecimalFormatSymbols(new DecimalFormatSymbols(Locale.ENGLISH));
 
     cbModel.removeAllItems();
     //cbModel.addItem(JDBCDataModel.class.getSimpleName());
@@ -100,7 +116,7 @@ public class FrmMain extends javax.swing.JFrame {
     rbUserBased = new javax.swing.JRadioButton();
     rbItemBased = new javax.swing.JRadioButton();
     jTabbedPane1 = new javax.swing.JTabbedPane();
-    jLayeredPane1 = new javax.swing.JLayeredPane();
+    pnDataModel = new javax.swing.JLayeredPane();
     jLabel1 = new javax.swing.JLabel();
     cbModel = new javax.swing.JComboBox();
     jLabel4 = new javax.swing.JLabel();
@@ -108,11 +124,11 @@ public class FrmMain extends javax.swing.JFrame {
     tfModelFile = new javax.swing.JTextField();
     jScrollPane1 = new javax.swing.JScrollPane();
     tbPreferences = new javax.swing.JTable();
-    jLayeredPane2 = new javax.swing.JLayeredPane();
+    pnOptions = new javax.swing.JLayeredPane();
     cbNN = new javax.swing.JComboBox();
     cbSimilarity = new javax.swing.JComboBox();
     lbNN = new javax.swing.JLabel();
-    jLabel2 = new javax.swing.JLabel();
+    lbSimilarity = new javax.swing.JLabel();
     lbNumOfUsers = new javax.swing.JLabel();
     lbThreshold = new javax.swing.JLabel();
     slThreshold = new javax.swing.JSlider();
@@ -122,9 +138,17 @@ public class FrmMain extends javax.swing.JFrame {
     slNumOfRecomendations = new javax.swing.JSlider();
     jLabel3 = new javax.swing.JLabel();
     cbRecommendationsToUser = new javax.swing.JComboBox<>();
-    jLayeredPane3 = new javax.swing.JLayeredPane();
+    lbFeatures = new javax.swing.JLabel();
+    spFeatures = new javax.swing.JSpinner();
+    lbInterations = new javax.swing.JLabel();
+    spInterations = new javax.swing.JSpinner();
+    lbLambda = new javax.swing.JLabel();
+    pnResults = new javax.swing.JLayeredPane();
     jScrollPane2 = new javax.swing.JScrollPane();
     taOutput = new javax.swing.JTextArea();
+    rbBooleanUser = new javax.swing.JRadioButton();
+    rbBooleanItem = new javax.swing.JRadioButton();
+    rbSVD = new javax.swing.JRadioButton();
 
     setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
     setTitle("MahoutGUI");
@@ -202,52 +226,52 @@ public class FrmMain extends javax.swing.JFrame {
       tbPreferences.getColumnModel().getColumn(2).setResizable(false);
     }
 
-    jLayeredPane1.setLayer(jLabel1, javax.swing.JLayeredPane.DEFAULT_LAYER);
-    jLayeredPane1.setLayer(cbModel, javax.swing.JLayeredPane.DEFAULT_LAYER);
-    jLayeredPane1.setLayer(jLabel4, javax.swing.JLayeredPane.DEFAULT_LAYER);
-    jLayeredPane1.setLayer(btFindFile, javax.swing.JLayeredPane.DEFAULT_LAYER);
-    jLayeredPane1.setLayer(tfModelFile, javax.swing.JLayeredPane.DEFAULT_LAYER);
-    jLayeredPane1.setLayer(jScrollPane1, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnDataModel.setLayer(jLabel1, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnDataModel.setLayer(cbModel, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnDataModel.setLayer(jLabel4, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnDataModel.setLayer(btFindFile, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnDataModel.setLayer(tfModelFile, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnDataModel.setLayer(jScrollPane1, javax.swing.JLayeredPane.DEFAULT_LAYER);
 
-    javax.swing.GroupLayout jLayeredPane1Layout = new javax.swing.GroupLayout(jLayeredPane1);
-    jLayeredPane1.setLayout(jLayeredPane1Layout);
-    jLayeredPane1Layout.setHorizontalGroup(
-      jLayeredPane1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-      .addGroup(jLayeredPane1Layout.createSequentialGroup()
+    javax.swing.GroupLayout pnDataModelLayout = new javax.swing.GroupLayout(pnDataModel);
+    pnDataModel.setLayout(pnDataModelLayout);
+    pnDataModelLayout.setHorizontalGroup(
+      pnDataModelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+      .addGroup(pnDataModelLayout.createSequentialGroup()
         .addContainerGap()
-        .addGroup(jLayeredPane1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-          .addGroup(jLayeredPane1Layout.createSequentialGroup()
-            .addGroup(jLayeredPane1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+        .addGroup(pnDataModelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+          .addGroup(pnDataModelLayout.createSequentialGroup()
+            .addGroup(pnDataModelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
               .addComponent(jLabel1)
               .addComponent(jLabel4))
             .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-            .addGroup(jLayeredPane1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-              .addGroup(jLayeredPane1Layout.createSequentialGroup()
+            .addGroup(pnDataModelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+              .addGroup(pnDataModelLayout.createSequentialGroup()
                 .addComponent(tfModelFile)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(btFindFile))
               .addComponent(cbModel, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
-          .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 492, Short.MAX_VALUE))
+          .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 536, Short.MAX_VALUE))
         .addContainerGap())
     );
-    jLayeredPane1Layout.setVerticalGroup(
-      jLayeredPane1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-      .addGroup(jLayeredPane1Layout.createSequentialGroup()
+    pnDataModelLayout.setVerticalGroup(
+      pnDataModelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+      .addGroup(pnDataModelLayout.createSequentialGroup()
         .addContainerGap()
-        .addGroup(jLayeredPane1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+        .addGroup(pnDataModelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
           .addComponent(jLabel1)
           .addComponent(cbModel, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-        .addGroup(jLayeredPane1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+        .addGroup(pnDataModelLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
           .addComponent(btFindFile)
           .addComponent(tfModelFile, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
           .addComponent(jLabel4))
         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-        .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 224, Short.MAX_VALUE)
+        .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 231, Short.MAX_VALUE)
         .addContainerGap())
     );
 
-    jTabbedPane1.addTab("Data Model", jLayeredPane1);
+    jTabbedPane1.addTab("Data Model", pnDataModel);
 
     cbNN.addItemListener(new java.awt.event.ItemListener() {
       public void itemStateChanged(java.awt.event.ItemEvent evt) {
@@ -256,10 +280,10 @@ public class FrmMain extends javax.swing.JFrame {
     });
 
     lbNN.setLabelFor(cbNN);
-    lbNN.setText("Nearest Neighborhood:");
+    lbNN.setText("Nearest Neighbor:");
 
-    jLabel2.setLabelFor(cbSimilarity);
-    jLabel2.setText("Similarity:");
+    lbSimilarity.setLabelFor(cbSimilarity);
+    lbSimilarity.setText("Similarity:");
 
     lbNumOfUsers.setLabelFor(spNumOfUser);
     lbNumOfUsers.setText("Num. of Users:");
@@ -285,14 +309,14 @@ public class FrmMain extends javax.swing.JFrame {
     jPanel1Layout.setHorizontalGroup(
       jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
       .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
-        .addContainerGap(31, Short.MAX_VALUE)
+        .addContainerGap()
         .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-          .addComponent(jLabel5, javax.swing.GroupLayout.Alignment.TRAILING)
-          .addComponent(jLabel3, javax.swing.GroupLayout.Alignment.TRAILING))
+          .addComponent(jLabel5)
+          .addComponent(jLabel3))
         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-        .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-          .addComponent(slNumOfRecomendations, javax.swing.GroupLayout.DEFAULT_SIZE, 361, Short.MAX_VALUE)
-          .addComponent(cbRecommendationsToUser, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+        .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+          .addComponent(cbRecommendationsToUser, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+          .addComponent(slNumOfRecomendations, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         .addContainerGap())
     );
     jPanel1Layout.setVerticalGroup(
@@ -312,110 +336,171 @@ public class FrmMain extends javax.swing.JFrame {
             .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))))
     );
 
-    jLayeredPane2.setLayer(cbNN, javax.swing.JLayeredPane.DEFAULT_LAYER);
-    jLayeredPane2.setLayer(cbSimilarity, javax.swing.JLayeredPane.DEFAULT_LAYER);
-    jLayeredPane2.setLayer(lbNN, javax.swing.JLayeredPane.DEFAULT_LAYER);
-    jLayeredPane2.setLayer(jLabel2, javax.swing.JLayeredPane.DEFAULT_LAYER);
-    jLayeredPane2.setLayer(lbNumOfUsers, javax.swing.JLayeredPane.DEFAULT_LAYER);
-    jLayeredPane2.setLayer(lbThreshold, javax.swing.JLayeredPane.DEFAULT_LAYER);
-    jLayeredPane2.setLayer(slThreshold, javax.swing.JLayeredPane.DEFAULT_LAYER);
-    jLayeredPane2.setLayer(spNumOfUser, javax.swing.JLayeredPane.DEFAULT_LAYER);
-    jLayeredPane2.setLayer(jPanel1, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    lbFeatures.setText("Features:");
 
-    javax.swing.GroupLayout jLayeredPane2Layout = new javax.swing.GroupLayout(jLayeredPane2);
-    jLayeredPane2.setLayout(jLayeredPane2Layout);
-    jLayeredPane2Layout.setHorizontalGroup(
-      jLayeredPane2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-      .addGroup(jLayeredPane2Layout.createSequentialGroup()
-        .addGroup(jLayeredPane2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-          .addGroup(jLayeredPane2Layout.createSequentialGroup()
-            .addGroup(jLayeredPane2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-              .addComponent(lbThreshold)
+    spFeatures.setModel(new javax.swing.SpinnerNumberModel(1, 1, null, 1));
+
+    lbInterations.setText("Interations:");
+
+    spInterations.setModel(new javax.swing.SpinnerNumberModel(1, 1, null, 1));
+
+    lbLambda.setText("Lambda:");
+
+    pnOptions.setLayer(cbNN, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnOptions.setLayer(cbSimilarity, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnOptions.setLayer(lbNN, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnOptions.setLayer(lbSimilarity, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnOptions.setLayer(lbNumOfUsers, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnOptions.setLayer(lbThreshold, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnOptions.setLayer(slThreshold, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnOptions.setLayer(spNumOfUser, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnOptions.setLayer(jPanel1, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnOptions.setLayer(lbFeatures, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnOptions.setLayer(spFeatures, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnOptions.setLayer(lbInterations, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnOptions.setLayer(spInterations, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnOptions.setLayer(lbLambda, javax.swing.JLayeredPane.DEFAULT_LAYER);
+
+    javax.swing.GroupLayout pnOptionsLayout = new javax.swing.GroupLayout(pnOptions);
+    pnOptions.setLayout(pnOptionsLayout);
+    pnOptionsLayout.setHorizontalGroup(
+      pnOptionsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+      .addGroup(pnOptionsLayout.createSequentialGroup()
+        .addGroup(pnOptionsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+          .addGroup(pnOptionsLayout.createSequentialGroup()
+            .addGroup(pnOptionsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
               .addComponent(lbNumOfUsers)
-              .addGroup(jLayeredPane2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+              .addGroup(pnOptionsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                 .addComponent(lbNN)
-                .addComponent(jLabel2, javax.swing.GroupLayout.Alignment.TRAILING)))
+                .addComponent(lbSimilarity, javax.swing.GroupLayout.Alignment.TRAILING))
+              .addComponent(lbFeatures)
+              .addComponent(lbThreshold))
             .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-            .addGroup(jLayeredPane2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(pnOptionsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
               .addComponent(spNumOfUser)
               .addComponent(cbNN, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
               .addComponent(cbSimilarity, javax.swing.GroupLayout.Alignment.TRAILING, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-              .addComponent(slThreshold, javax.swing.GroupLayout.DEFAULT_SIZE, 345, Short.MAX_VALUE)))
-          .addGroup(jLayeredPane2Layout.createSequentialGroup()
+              .addComponent(slThreshold, javax.swing.GroupLayout.DEFAULT_SIZE, 421, Short.MAX_VALUE)
+              .addGroup(pnOptionsLayout.createSequentialGroup()
+                .addComponent(spFeatures, javax.swing.GroupLayout.PREFERRED_SIZE, 60, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(lbInterations)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(spInterations, javax.swing.GroupLayout.PREFERRED_SIZE, 60, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(lbLambda)
+                .addGap(0, 0, Short.MAX_VALUE))))
+          .addGroup(pnOptionsLayout.createSequentialGroup()
             .addContainerGap()
             .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
         .addContainerGap())
     );
-    jLayeredPane2Layout.setVerticalGroup(
-      jLayeredPane2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-      .addGroup(jLayeredPane2Layout.createSequentialGroup()
+    pnOptionsLayout.setVerticalGroup(
+      pnOptionsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+      .addGroup(pnOptionsLayout.createSequentialGroup()
         .addContainerGap()
-        .addGroup(jLayeredPane2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+        .addGroup(pnOptionsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
           .addComponent(cbSimilarity, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-          .addComponent(jLabel2))
+          .addComponent(lbSimilarity))
         .addGap(16, 16, 16)
-        .addGroup(jLayeredPane2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+        .addGroup(pnOptionsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
           .addComponent(cbNN, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
           .addComponent(lbNN))
         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-        .addGroup(jLayeredPane2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+        .addGroup(pnOptionsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
           .addComponent(lbNumOfUsers)
           .addComponent(spNumOfUser, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
         .addGap(18, 18, 18)
-        .addGroup(jLayeredPane2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+        .addGroup(pnOptionsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
           .addComponent(slThreshold, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-          .addGroup(jLayeredPane2Layout.createSequentialGroup()
-            .addGap(11, 11, 11)
+          .addGroup(pnOptionsLayout.createSequentialGroup()
+            .addGap(14, 14, 14)
             .addComponent(lbThreshold)))
-        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+        .addGroup(pnOptionsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+          .addComponent(spFeatures, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+          .addComponent(lbInterations)
+          .addComponent(spInterations, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+          .addComponent(lbLambda)
+          .addComponent(lbFeatures))
+        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
         .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-        .addContainerGap(31, Short.MAX_VALUE))
+        .addContainerGap())
     );
 
-    jTabbedPane1.addTab("Options", jLayeredPane2);
+    jTabbedPane1.addTab("Options", pnOptions);
 
     taOutput.setColumns(20);
     taOutput.setRows(5);
     jScrollPane2.setViewportView(taOutput);
 
-    jLayeredPane3.setLayer(jScrollPane2, javax.swing.JLayeredPane.DEFAULT_LAYER);
+    pnResults.setLayer(jScrollPane2, javax.swing.JLayeredPane.DEFAULT_LAYER);
 
-    javax.swing.GroupLayout jLayeredPane3Layout = new javax.swing.GroupLayout(jLayeredPane3);
-    jLayeredPane3.setLayout(jLayeredPane3Layout);
-    jLayeredPane3Layout.setHorizontalGroup(
-      jLayeredPane3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-      .addGroup(jLayeredPane3Layout.createSequentialGroup()
+    javax.swing.GroupLayout pnResultsLayout = new javax.swing.GroupLayout(pnResults);
+    pnResults.setLayout(pnResultsLayout);
+    pnResultsLayout.setHorizontalGroup(
+      pnResultsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+      .addGroup(pnResultsLayout.createSequentialGroup()
         .addContainerGap()
-        .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 492, Short.MAX_VALUE)
+        .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 536, Short.MAX_VALUE)
         .addContainerGap())
     );
-    jLayeredPane3Layout.setVerticalGroup(
-      jLayeredPane3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-      .addGroup(jLayeredPane3Layout.createSequentialGroup()
+    pnResultsLayout.setVerticalGroup(
+      pnResultsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+      .addGroup(pnResultsLayout.createSequentialGroup()
         .addContainerGap()
-        .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 296, Short.MAX_VALUE)
+        .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 303, Short.MAX_VALUE)
         .addContainerGap())
     );
 
-    jTabbedPane1.addTab("Recommendations Results", jLayeredPane3);
+    jTabbedPane1.addTab("Recommendations Results", pnResults);
+
+    buttonGroup1.add(rbBooleanUser);
+    rbBooleanUser.setText("Boolean User");
+    rbBooleanUser.addItemListener(new java.awt.event.ItemListener() {
+      public void itemStateChanged(java.awt.event.ItemEvent evt) {
+        rbBooleanUserItemStateChanged(evt);
+      }
+    });
+
+    buttonGroup1.add(rbBooleanItem);
+    rbBooleanItem.setText("Boolean Item");
+    rbBooleanItem.addItemListener(new java.awt.event.ItemListener() {
+      public void itemStateChanged(java.awt.event.ItemEvent evt) {
+        rbBooleanItemItemStateChanged(evt);
+      }
+    });
+
+    buttonGroup1.add(rbSVD);
+    rbSVD.setText("SVD");
+    rbSVD.addItemListener(new java.awt.event.ItemListener() {
+      public void itemStateChanged(java.awt.event.ItemEvent evt) {
+        rbSVDItemStateChanged(evt);
+      }
+    });
 
     javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
     getContentPane().setLayout(layout);
     layout.setHorizontalGroup(
       layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
       .addGroup(layout.createSequentialGroup()
-        .addGap(172, 172, 172)
-        .addComponent(rbUserBased)
-        .addGap(18, 18, 18)
-        .addComponent(rbItemBased)
-        .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-      .addGroup(layout.createSequentialGroup()
         .addContainerGap()
         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
           .addComponent(jTabbedPane1)
           .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
             .addGap(0, 0, Short.MAX_VALUE)
-            .addComponent(btRun, javax.swing.GroupLayout.PREFERRED_SIZE, 75, javax.swing.GroupLayout.PREFERRED_SIZE)))
+            .addComponent(btRun, javax.swing.GroupLayout.PREFERRED_SIZE, 75, javax.swing.GroupLayout.PREFERRED_SIZE))
+          .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+            .addComponent(rbUserBased)
+            .addGap(18, 18, 18)
+            .addComponent(rbItemBased)
+            .addGap(18, 18, 18)
+            .addComponent(rbBooleanUser)
+            .addGap(18, 18, 18)
+            .addComponent(rbBooleanItem)
+            .addGap(18, 18, 18)
+            .addComponent(rbSVD)
+            .addGap(0, 0, Short.MAX_VALUE)))
         .addContainerGap())
     );
     layout.setVerticalGroup(
@@ -424,7 +509,10 @@ public class FrmMain extends javax.swing.JFrame {
         .addContainerGap()
         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
           .addComponent(rbUserBased)
-          .addComponent(rbItemBased))
+          .addComponent(rbItemBased)
+          .addComponent(rbBooleanUser)
+          .addComponent(rbBooleanItem)
+          .addComponent(rbSVD))
         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
         .addComponent(jTabbedPane1)
         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
@@ -440,69 +528,84 @@ public class FrmMain extends javax.swing.JFrame {
     taOutput.setText(taOutput.getText() + "\n" + t);
   }
 
-  private void performItemRecommendation(DataModel model, ItemSimilarity itemSimilarity, long userId, int numberOfRecommendation) throws TasteException {
-    RecommenderBuilder recommenderBuilder = new RecommenderBuilder() {
-      @Override
-      public Recommender buildRecommender(DataModel model) throws TasteException {
-        return new GenericItemBasedRecommender(model, itemSimilarity);
-      }
-    };
-
-    //Recommender itemRecommender = new GenericItemBasedRecommender(model, itemSimilarity);
-    List<RecommendedItem> itemBasedRecommendations = recommenderBuilder.buildRecommender(model).recommend(userId, numberOfRecommendation);
-
-    int cont = 0;
-    addOutput("Items Recommended for user " + userId + ":");
-    for (RecommendedItem r : itemBasedRecommendations) {
-      addOutput("- " + r.getItemID() + " preference predicted is " + r.getValue());
-      cont++;
+  private double toSecureDouble(double d) {
+    if (Double.isNaN(d)) {
+      return 0D;
     }
 
-    IRStatistics stats = irStats.evaluate(recommenderBuilder, null, model, null, cont, GenericRecommenderIRStatsEvaluator.CHOOSE_THRESHOLD, 1.0);
-
-    // Use 70% of the data to train; test using the other 30%.
-    double r = rms.evaluate(recommenderBuilder, null, model, 0.7, 1.0);
-    double m = mae.evaluate(recommenderBuilder, null, model, 0.7, 1.0);
-
-    addOutput(" Precision: " + DF.format(stats.getPrecision())
-            + " Recall: " + DF.format(stats.getRecall())
-            + " RMSE: " + DF.format(r)
-            + " MAE: " + DF.format(m) + "\n");
+    return d;
   }
 
-  private void performUserRecommendation(DataModel model, UserNeighborhood neighbour, UserSimilarity similarity, long userId, int numberOfRecommendation) throws TasteException {
+  private void performRecommendation(List<Long> usersId, int numberOfRecommendation, String type) throws TasteException {
     RecommenderBuilder recommenderBuilder = new RecommenderBuilder() {
       @Override
       public Recommender buildRecommender(DataModel model) throws TasteException {
-        return new GenericUserBasedRecommender(model, neighbour, similarity);
+        if (rbItemBased.isSelected()) {
+          return new GenericItemBasedRecommender(model, is);
+        } else if (rbBooleanItem.isSelected()) {
+          return new GenericBooleanPrefItemBasedRecommender(model, is);
+        } else if (rbUserBased.isSelected()) {
+          return new GenericUserBasedRecommender(model, neighbour, us);
+        } else if (rbBooleanUser.isSelected()) {
+          return new GenericBooleanPrefUserBasedRecommender(model, neighbour, us);
+        } else if (rbSVD.isSelected()) {
+          return new SVDRecommender(model, factorizer);
+        }
+
+        return null;
       }
     };
 
-    //Recommender recommender = new GenericUserBasedRecommender(model, neighbour, similarity);
-    List<RecommendedItem> recommendations = recommenderBuilder.buildRecommender(model).recommend(userId, numberOfRecommendation);
+    int users = usersId.size();
+    double sumP = 0, sumR = 0, sumRmse = 0, sumMae = 0;
+    Recommender rec = recommenderBuilder.buildRecommender(this.model);
 
-    int cont = 0;
-    addOutput("Items Recommended for user " + userId + ":");
-    for (RecommendedItem r : recommendations) {
-      addOutput("- " + r.getItemID() + " preference predicted: " + r.getValue());
-      cont++;
+    for (int i = 0; i < usersId.size(); i++) {
+      long userId = usersId.get(i);
+
+      List<RecommendedItem> recs = rec.recommend(userId, numberOfRecommendation);
+      if (recs.isEmpty()) {
+        addOutput("No Recommendations with " + type + "!\n");
+      } else {
+        int cont = 0;
+        addOutput("Items Recommended for user " + userId + " with " + type + ":");
+        for (RecommendedItem r : recs) {
+          addOutput("- " + r.getItemID() + " preference predicted: " + r.getValue());
+          cont++;
+        }
+
+        IRStatistics stats = irStats.evaluate(recommenderBuilder, null, this.model, null, cont, GenericRecommenderIRStatsEvaluator.CHOOSE_THRESHOLD, 1.0);
+
+        // Use 90% of the data to train; test using the other 30%.
+        double r = rms.evaluate(recommenderBuilder, null, model, 0.9, 1.0);
+        double m = mae.evaluate(recommenderBuilder, null, model, 0.9, 1.0);
+
+        sumRmse += r;
+        sumMae += m;
+        sumP += toSecureDouble(stats.getPrecision());
+        sumR += toSecureDouble(stats.getRecall());
+
+        addOutput(" Precision@" + userId + ": " + DF.format(toSecureDouble(stats.getPrecision()))
+                + " Recall@" + userId + ": " + DF.format(toSecureDouble(stats.getRecall()))
+                + " RMSE@" + userId + ": " + DF.format(r)
+                + " MAE@" + userId + ": " + DF.format(m) + "\n");
+      }
     }
 
-    IRStatistics stats = irStats.evaluate(recommenderBuilder, null, model, null, cont, GenericRecommenderIRStatsEvaluator.CHOOSE_THRESHOLD, 1.0);
+    if (users < 2) {
+      return;
+    }
 
-    // Use 70% of the data to train; test using the other 30%.
-    double r = rms.evaluate(recommenderBuilder, null, model, 0.7, 1.0);
-    double m = mae.evaluate(recommenderBuilder, null, model, 0.7, 1.0);
-
-    addOutput(" Precision: " + DF.format(stats.getPrecision())
-            + " Recall: " + DF.format(stats.getRecall())
-            + " RMSE: " + DF.format(r)
-            + " MAE: " + DF.format(m) + "\n");
+    addOutput("MAP: " + DF.format(sumP / users)
+            + " MAR: " + DF.format(sumR / users)
+            + " AVG RMSE: " + DF.format(sumRmse / users)
+            + " AVG MAE: " + DF.format(sumMae / users) + "\n");
   }
 
   private void setUserDetails() {
     spNumOfUser.setModel(new javax.swing.SpinnerNumberModel(1, 1, userIds.size(), 1));
     cbRecommendationsToUser.removeAllItems();
+    cbRecommendationsToUser.addItem("All Users");
     Iterator<Long> it = userIds.iterator();
     while (it.hasNext()) {
       Long id = it.next();
@@ -512,81 +615,99 @@ public class FrmMain extends javax.swing.JFrame {
 
   private void btRunActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btRunActionPerformed
     try {
-
-      //Model
-      DataModel model = null;
-      if (cbModel.getSelectedItem().equals(JDBCDataModel.class.getSimpleName())) {
-        //model = new JDBCDataModel();
-      } else if (cbModel.getSelectedItem().equals(FileDataModel.class.getSimpleName())) {
+      //Model      
+      if (cbModel.getSelectedItem().equals(FileDataModel.class.getSimpleName())) {
         File f = new File(tfModelFile.getText());
         if (!f.exists()) {
           JOptionPane.showMessageDialog(null, "File Not Found!");
           return;
         }
-        model = new FileDataModel(f);
-      } else if (cbModel.getSelectedItem().equals(GenericPreference.class.getSimpleName())) {
-        //model = new GenericDataModel();
-      } else if (cbModel.getSelectedItem().equals(GenericBooleanPrefDataModel.class.getSimpleName())) {
-
+        if (rbUserBased.isSelected() || rbItemBased.isSelected() || rbSVD.isSelected()) {
+          this.model = new FileDataModel(f);
+        } else if (rbBooleanUser.isSelected() || rbBooleanItem.isSelected()) {
+          this.model = new GenericBooleanPrefDataModel(new FileDataModel(f));
+        }
       } else if (cbModel.getSelectedItem().equals(HibernateDataModel.class.getSimpleName())) {
-        model = new HibernateDataModel(configDB);
+        this.model = new HibernateDataModel(configDB);
       }
 
-      long userID = (long) cbRecommendationsToUser.getSelectedItem();
+      //User params
+      List<Long> usersId = new ArrayList<>();
+      if (cbRecommendationsToUser.getSelectedItem().getClass().equals(String.class)) {
+        usersId.addAll(userIds);
+      } else {
+        usersId.add((long) cbRecommendationsToUser.getSelectedItem());
+      }
       int NumOfRec = slNumOfRecomendations.getValue();
 
       //Nearest Neighborhood
-      UserNeighborhood un = null;
-      if (rbItemBased.isSelected()) {
-        ItemSimilarity is = null;
-
+      if (rbItemBased.isSelected() || rbBooleanItem.isSelected()) {
         //Similarity       
         if (cbSimilarity.getSelectedItem().equals(LogLikelihoodSimilarity.class.getSimpleName())) {
-          is = new LogLikelihoodSimilarity(model);
+          this.is = new LogLikelihoodSimilarity(model);
         } else if (cbSimilarity.getSelectedItem().equals(PearsonCorrelationSimilarity.class.getSimpleName())) {
-          is = new PearsonCorrelationSimilarity(model);
+          this.is = new PearsonCorrelationSimilarity(model);
         } else if (cbSimilarity.getSelectedItem().equals(SpearmanCorrelationSimilarity.class.getSimpleName())) {
-          ///is = new SpearmanCorrelationSimilarity(model);
+          ///this.is = new SpearmanCorrelationSimilarity(model);
         } else if (cbSimilarity.getSelectedItem().equals(TanimotoCoefficientSimilarity.class.getSimpleName())) {
-          is = new TanimotoCoefficientSimilarity(model);
+          this.is = new TanimotoCoefficientSimilarity(model);
         } else if (cbSimilarity.getSelectedItem().equals(CityBlockSimilarity.class.getSimpleName())) {
-          is = new CityBlockSimilarity(model);
+          this.is = new CityBlockSimilarity(model);
         } else if (cbSimilarity.getSelectedItem().equals(EuclideanDistanceSimilarity.class.getSimpleName())) {
-          is = new EuclideanDistanceSimilarity(model);
+          this.is = new EuclideanDistanceSimilarity(model);
         } else if (cbSimilarity.getSelectedItem().equals(UncenteredCosineSimilarity.class.getSimpleName())) {
-          is = new UncenteredCosineSimilarity(model);
+          this.is = new UncenteredCosineSimilarity(model);
         }
 
-        performItemRecommendation(model, is, userID, NumOfRec);
-      } else if (rbUserBased.isSelected()) {
-        UserSimilarity us = null;
-
+        if (rbItemBased.isSelected()) {
+          performRecommendation(usersId, NumOfRec, "Item-Based");
+        } else if (rbBooleanItem.isSelected()) {
+          performRecommendation(usersId, NumOfRec, "Boolean Item-Based");
+        }
+        jTabbedPane1.setSelectedIndex(2);
+        pnResults.grabFocus();
+      } else if (rbUserBased.isSelected() || rbBooleanUser.isSelected()) {
         //Similarity       
         if (cbSimilarity.getSelectedItem().equals(LogLikelihoodSimilarity.class.getSimpleName())) {
-          us = new LogLikelihoodSimilarity(model);
+          this.us = new LogLikelihoodSimilarity(model);
         } else if (cbSimilarity.getSelectedItem().equals(PearsonCorrelationSimilarity.class.getSimpleName())) {
-          us = new PearsonCorrelationSimilarity(model);
+          this.us = new PearsonCorrelationSimilarity(model);
         } else if (cbSimilarity.getSelectedItem().equals(SpearmanCorrelationSimilarity.class.getSimpleName())) {
-          us = new SpearmanCorrelationSimilarity(model);
+          this.us = new SpearmanCorrelationSimilarity(model);
         } else if (cbSimilarity.getSelectedItem().equals(TanimotoCoefficientSimilarity.class.getSimpleName())) {
-          us = new TanimotoCoefficientSimilarity(model);
+          this.us = new TanimotoCoefficientSimilarity(model);
         } else if (cbSimilarity.getSelectedItem().equals(CityBlockSimilarity.class.getSimpleName())) {
-          us = new CityBlockSimilarity(model);
+          this.us = new CityBlockSimilarity(model);
         } else if (cbSimilarity.getSelectedItem().equals(EuclideanDistanceSimilarity.class.getSimpleName())) {
-          us = new EuclideanDistanceSimilarity(model);
+          this.us = new EuclideanDistanceSimilarity(model);
         } else if (cbSimilarity.getSelectedItem().equals(UncenteredCosineSimilarity.class.getSimpleName())) {
-          us = new UncenteredCosineSimilarity(model);
+          this.us = new UncenteredCosineSimilarity(model);
         }
 
         if (cbNN.getSelectedItem().equals(NearestNUserNeighborhood.class.getSimpleName())) {
           int n = (int) spNumOfUser.getValue();
-          un = new NearestNUserNeighborhood(n, us, model);
+          this.neighbour = new NearestNUserNeighborhood(n, us, model);
         } else if (cbNN.getSelectedItem().equals(ThresholdUserNeighborhood.class.getSimpleName())) {
           double t = (double) (slThreshold.getValue() / 100);
-          un = new ThresholdUserNeighborhood(t, us, model);
+          this.neighbour = new ThresholdUserNeighborhood(t, us, model);
         }
 
-        performUserRecommendation(model, un, us, userID, NumOfRec);
+        if (rbUserBased.isSelected()) {
+          performRecommendation(usersId, NumOfRec, "User-Based");
+        } else if (rbBooleanUser.isSelected()) {
+          performRecommendation(usersId, NumOfRec, "Boolean User-Based");
+        }
+        jTabbedPane1.setSelectedIndex(2);
+        pnResults.grabFocus();
+      } else if (rbSVD.isSelected()) {
+        int f = (int) spFeatures.getValue();
+        int i = (int) spInterations.getValue();
+        double lambda = (double) (slThreshold.getValue() / 100);
+        this.factorizer = new ALSWRFactorizer(model, f, 0.065, i);
+
+        performRecommendation(usersId, NumOfRec, "SVD");
+        jTabbedPane1.setSelectedIndex(2);
+        pnResults.grabFocus();
       }
     } catch (Exception ex) {
       Logger.getLogger(FrmMain.class.getName()).log(Level.SEVERE, null, ex);
@@ -599,21 +720,33 @@ public class FrmMain extends javax.swing.JFrame {
       JFileChooser abrir = new JFileChooser();
       abrir.setFileFilter(new FileNameExtensionFilter("CSV File", "csv"));
       int retorno = abrir.showOpenDialog(null);
-      if (retorno == JFileChooser.APPROVE_OPTION) {
-        tfModelFile.setText(abrir.getSelectedFile().getAbsolutePath());
+      if (retorno != JFileChooser.APPROVE_OPTION) {
+        return;
       }
 
+      tfModelFile.setText(abrir.getSelectedFile().getAbsolutePath());
       userIds.clear();
       String arq = FileUtils.readFileToString(abrir.getSelectedFile(), "UTF-8");
       String[] linha = arq.split("\n");
-      String[] coluns = new String[]{"User ID", "Item ID", "Preference"};
-      Object[][] data = new Object[linha.length][3];
+
+      int colunns = linha[0].split(",").length;
+      if (colunns == 2) { //Boolean
+        coluns = new String[]{"User ID", "Item ID"};
+        data = new Object[linha.length][2];
+        types = new Class[]{java.lang.Integer.class, java.lang.Integer.class};
+        canEdit = new boolean[]{false, false};
+      } else if (colunns == 3) {
+        coluns = new String[]{"User ID", "Item ID", "Preference"};
+        data = new Object[linha.length][3];
+        types = new Class[]{java.lang.Integer.class, java.lang.Integer.class, java.lang.Double.class};
+        canEdit = new boolean[]{false, false, false};
+      }
 
       for (int i = 0; i < linha.length; i++) {
         String linha1 = linha[i];
         String[] col = linha1.split(",");
 
-        if (col.length != 3) {
+        if ((col.length < 2) || (col.length > 3)) {
           return;
         }
 
@@ -624,13 +757,13 @@ public class FrmMain extends javax.swing.JFrame {
 
         data[i][0] = userId;
         data[i][1] = Long.parseLong(col[1]);
-        data[i][2] = Double.parseDouble(col[2]);
+        if (col.length == 3) {
+          data[i][2] = Double.parseDouble(col[2]);
+        }
       }
 
       setUserDetails();
       tbPreferences.setModel(new javax.swing.table.DefaultTableModel(data, coluns) {
-        Class[] types = new Class[]{java.lang.Integer.class, java.lang.Integer.class, java.lang.Double.class};
-        boolean[] canEdit = new boolean[]{false, false, false};
 
         @Override
         public Class getColumnClass(int columnIndex) {
@@ -649,28 +782,52 @@ public class FrmMain extends javax.swing.JFrame {
   }//GEN-LAST:event_btFindFileActionPerformed
 
   private void cbNNItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_cbNNItemStateChanged
-    spNumOfUser.setEnabled(false);
-    lbNumOfUsers.setEnabled(false);
-    slThreshold.setEnabled(false);
-    lbThreshold.setEnabled(false);
+    spNumOfUser.setVisible(false);
+    lbNumOfUsers.setVisible(false);
+
+    slThreshold.setVisible(false);
+    lbThreshold.setVisible(false);
 
     if (!cbNN.isEnabled()) {
       return;
     }
 
     if (cbNN.getSelectedItem().equals(NearestNUserNeighborhood.class.getSimpleName())) {
-      spNumOfUser.setEnabled(true);
-      lbNumOfUsers.setEnabled(true);
+      spNumOfUser.setVisible(true);
+      lbNumOfUsers.setVisible(true);
     } else if (cbNN.getSelectedItem().equals(ThresholdUserNeighborhood.class.getSimpleName())) {
-      slThreshold.setEnabled(true);
-      lbThreshold.setEnabled(true);
+      slThreshold.setVisible(true);
+      lbThreshold.setVisible(true);
     }
   }//GEN-LAST:event_cbNNItemStateChanged
 
-  private void rbUserBasedItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_rbUserBasedItemStateChanged
-    if (rbUserBased.isSelected()) {
-      cbNN.setEnabled(true);
-      lbNN.setEnabled(true);
+  private void updateConfig(java.awt.event.ItemEvent evt) {
+    //disable all
+    lbSimilarity.setVisible(false);
+    cbSimilarity.setVisible(false);
+
+    lbNN.setVisible(false);
+    cbNN.setVisible(false);
+    cbNNItemStateChanged(evt);
+
+    lbNumOfUsers.setVisible(false);
+    spNumOfUser.setVisible(false);
+
+    lbThreshold.setVisible(false);
+    slThreshold.setVisible(false);
+
+    lbFeatures.setVisible(false);
+    spFeatures.setVisible(false);
+
+    lbInterations.setVisible(false);
+    spInterations.setVisible(false);
+
+    lbLambda.setVisible(false);
+
+    //enable acording to option
+    if (rbUserBased.isSelected() || rbBooleanUser.isSelected()) {
+      cbNN.setVisible(true);
+      lbNN.setVisible(true);
       cbNNItemStateChanged(evt);
 
       cbSimilarity.removeAllItems();
@@ -681,13 +838,10 @@ public class FrmMain extends javax.swing.JFrame {
       cbSimilarity.addItem(CityBlockSimilarity.class.getSimpleName());
       cbSimilarity.addItem(EuclideanDistanceSimilarity.class.getSimpleName());
       cbSimilarity.addItem(UncenteredCosineSimilarity.class.getSimpleName());
-    }
-  }//GEN-LAST:event_rbUserBasedItemStateChanged
 
-  private void rbItemBasedItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_rbItemBasedItemStateChanged
-    if (rbItemBased.isSelected()) {
-      cbNN.setEnabled(false);
-      lbNN.setEnabled(false);
+      lbSimilarity.setVisible(true);
+      cbSimilarity.setVisible(true);
+    } else if (rbItemBased.isSelected() || rbBooleanItem.isSelected()) {
       cbNNItemStateChanged(evt);
 
       cbSimilarity.removeAllItems();
@@ -698,13 +852,30 @@ public class FrmMain extends javax.swing.JFrame {
       cbSimilarity.addItem(CityBlockSimilarity.class.getSimpleName());
       cbSimilarity.addItem(EuclideanDistanceSimilarity.class.getSimpleName());
       cbSimilarity.addItem(UncenteredCosineSimilarity.class.getSimpleName());
+
+      lbSimilarity.setVisible(true);
+      cbSimilarity.setVisible(true);
+    } else if (rbSVD.isSelected()) {
+      lbFeatures.setVisible(true);
+      spFeatures.setVisible(true);
+
+      lbInterations.setVisible(true);
+      spInterations.setVisible(true);
+
+      lbLambda.setVisible(true);
     }
+  }
+  private void rbUserBasedItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_rbUserBasedItemStateChanged
+    updateConfig(evt);
+  }//GEN-LAST:event_rbUserBasedItemStateChanged
+
+  private void rbItemBasedItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_rbItemBasedItemStateChanged
+    updateConfig(evt);
   }//GEN-LAST:event_rbItemBasedItemStateChanged
 
   private void getDataFromDB() throws Exception {
     userIds.clear();
-    String[] coluns = new String[]{"User ID", "Item ID", "Preference"};
-    Object[][] data = null;
+    coluns = new String[]{"User ID", "Item ID", "Preference"};
 
     Session s = null;
     Transaction t = null;
@@ -775,11 +946,15 @@ public class FrmMain extends javax.swing.JFrame {
   }
 
   private void cbModelItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_cbModelItemStateChanged
-    try {
-      if (cbModel.getSelectedItem().equals(FileDataModel.class.getSimpleName())) {
+    if (evt.getStateChange() != ItemEvent.SELECTED) {
+      return;
+    }
 
-      } else if (cbModel.getSelectedItem().equals(HibernateDataModel.class.getSimpleName())) {
-        frmBD.setVisible(true);
+    try {
+      if (evt.getItem().equals(FileDataModel.class.getSimpleName())) {
+
+      } else if (evt.getItem().equals(HibernateDataModel.class.getSimpleName())) {
+        new FrmDB(configDB).setVisible(true);
         getDataFromDB();
         setUserDetails();
       }
@@ -787,6 +962,18 @@ public class FrmMain extends javax.swing.JFrame {
       Logger.getLogger(FrmMain.class.getName()).log(Level.SEVERE, null, ex);
     }
   }//GEN-LAST:event_cbModelItemStateChanged
+
+  private void rbSVDItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_rbSVDItemStateChanged
+    updateConfig(evt);
+  }//GEN-LAST:event_rbSVDItemStateChanged
+
+  private void rbBooleanUserItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_rbBooleanUserItemStateChanged
+    updateConfig(evt);
+  }//GEN-LAST:event_rbBooleanUserItemStateChanged
+
+  private void rbBooleanItemItemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_rbBooleanItemItemStateChanged
+    updateConfig(evt);
+  }//GEN-LAST:event_rbBooleanItemItemStateChanged
 
   /**
    * @param args the command line arguments
@@ -823,27 +1010,35 @@ public class FrmMain extends javax.swing.JFrame {
   private javax.swing.ButtonGroup buttonGroup1;
   private javax.swing.JComboBox cbModel;
   private javax.swing.JComboBox cbNN;
-  private javax.swing.JComboBox<Long> cbRecommendationsToUser;
+  private javax.swing.JComboBox<Object> cbRecommendationsToUser;
   private javax.swing.JComboBox cbSimilarity;
   private javax.swing.JLabel jLabel1;
-  private javax.swing.JLabel jLabel2;
   private javax.swing.JLabel jLabel3;
   private javax.swing.JLabel jLabel4;
   private javax.swing.JLabel jLabel5;
-  private javax.swing.JLayeredPane jLayeredPane1;
-  private javax.swing.JLayeredPane jLayeredPane2;
-  private javax.swing.JLayeredPane jLayeredPane3;
   private javax.swing.JPanel jPanel1;
   private javax.swing.JScrollPane jScrollPane1;
   private javax.swing.JScrollPane jScrollPane2;
   private javax.swing.JTabbedPane jTabbedPane1;
+  private javax.swing.JLabel lbFeatures;
+  private javax.swing.JLabel lbInterations;
+  private javax.swing.JLabel lbLambda;
   private javax.swing.JLabel lbNN;
   private javax.swing.JLabel lbNumOfUsers;
+  private javax.swing.JLabel lbSimilarity;
   private javax.swing.JLabel lbThreshold;
+  private javax.swing.JLayeredPane pnDataModel;
+  private javax.swing.JLayeredPane pnOptions;
+  private javax.swing.JLayeredPane pnResults;
+  private javax.swing.JRadioButton rbBooleanItem;
+  private javax.swing.JRadioButton rbBooleanUser;
   private javax.swing.JRadioButton rbItemBased;
+  private javax.swing.JRadioButton rbSVD;
   private javax.swing.JRadioButton rbUserBased;
   private javax.swing.JSlider slNumOfRecomendations;
   private javax.swing.JSlider slThreshold;
+  private javax.swing.JSpinner spFeatures;
+  private javax.swing.JSpinner spInterations;
   private javax.swing.JSpinner spNumOfUser;
   private javax.swing.JTextArea taOutput;
   private javax.swing.JTable tbPreferences;
